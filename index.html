@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyless Moto Security - ESP32</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #0d1117;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 400px;
+            margin: auto;
+            background: #161b22;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            margin: 10px 0;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        input {
+            width: 80%;
+            padding: 12px;
+            font-size: 22px;
+            text-align: center;
+            letter-spacing: 8px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            background: #0d1117;
+            color: #fff;
+        }
+        #btnConectar { background-color: #ff9800; color: white; }
+        #btnDesbloquear { background-color: #2196F3; color: white; }
+        .btn-encender { background-color: #2e7d32; color: white; }
+        .btn-apagar { background-color: #c62828; color: white; }
+        .btn-arranque { background-color: #f57c00; color: white; }
+        
+        .panel-oculto { display: none; }
+        #estado { margin-top: 15px; font-size: 14px; color: #8b949e; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Keyless Moto Control</h2>
+        
+        <!-- PASO 1: CONEXIÓN BLUETOOTH -->
+        <div id="seccionConexion">
+            <button id="btnConectar" onclick="conectarBLE()">Conectar Bluetooth</button>
+            <p id="estado">Estado: Desconectado</p>
+        </div>
+
+        <!-- PASO 2: INGRESO DE PIN (Oculto hasta conectar) -->
+        <div id="seccionPin" class="panel-oculto">
+            <h3>Ingrese PIN de Seguridad</h3>
+            <p style="font-size: 13px; color: #8b949e;">Clave por defecto: 1234</p>
+            <input type="password" id="inputPin" maxlength="4" placeholder="••••">
+            <button id="btnDesbloquear" onclick="verificarPin()">Desbloquear Sistema</button>
+        </div>
+
+        <!-- PASO 3: PANEL DE CONTROL DE LA MOTO (Oculto hasta validar PIN) -->
+        <div id="seccionControl" class="panel-oculto">
+            <h3 style="color: #4CAF50;">Sistema Desbloqueado</h3>
+            
+            <button class="btn-encender" onclick="enviarComando('1')">🔌 Activar Ignición (ON)</button>
+            <button class="btn-arranque" onclick="enviarComando('A')">⚡ Botón de Arranque (Estarter)</button>
+            <button class="btn-apagar" onclick="enviarComando('0')">❌ Apagar Todo (OFF)</button>
+        </div>
+    </div>
+
+    <script>
+        const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const CHARACTERISTIC_UUID_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+        
+        const PIN_CORRECTO = "1234"; // Puedes cambiar tu PIN aquí
+
+        let bluetoothServer = null;
+        let rxCharacteristic = null;
+
+        async function conectarBLE() {
+            try {
+                document.getElementById("estado").innerText = "Buscando dispositivo...";
+                
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: "Moto_ESP32_Key" }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                document.getElementById("estado").innerText = "Conectando al servidor GATT...";
+                bluetoothServer = await device.gatt.connect();
+
+                const service = await bluetoothServer.getPrimaryService(SERVICE_UUID);
+                rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
+
+                // Ocultar sección conexión y mostrar PIN
+                document.getElementById("seccionConexion").style.display = "none";
+                document.getElementById("seccionPin").style.display = "block";
+
+            } catch (error) {
+                console.error("Error de conexión:", error);
+                document.getElementById("estado").innerText = "Error: " + error;
+            }
+        }
+
+        function verificarPin() {
+            const pinIngresado = document.getElementById("inputPin").value;
+            
+            if (pinIngresado === PIN_CORRECTO) {
+                // Ocultar PIN y mostrar panel de la moto
+                document.getElementById("seccionPin").style.display = "none";
+                document.getElementById("seccionControl").style.display = "block";
+            } else {
+                alert("PIN Incorrecto. Intente nuevamente.");
+                document.getElementById("inputPin").value = "";
+            }
+        }
+
+        async function enviarComando(valor) {
+            if (!rxCharacteristic) {
+                alert("Bluetooth desconectado.");
+                return;
+            }
+
+            try {
+                const encoder = new TextEncoder();
+                await rxCharacteristic.writeValueWithoutResponse(encoder.encode(valor));
+                console.log("Comando enviado: " + valor);
+            } catch (error) {
+                console.error("Error al enviar comando:", error);
+            }
+        }
+    </script>
+
+</body>
+</html>
